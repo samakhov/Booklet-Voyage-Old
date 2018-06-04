@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <title>Voyage: Persisting Objects in Document Databases</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Highlight js -->
+    <link rel="stylesheet" href="_support/html/highlightjs/styles/default.css">
+    <link rel="stylesheet" href="_support/html/css/highlight-commands.css">
+    <script src="_support/html/highlightjs/highlight.pack.js"></script>
+    <script src="_support/html/js/highlight-commands.js"></script>
+
+    <!-- Bootstrap -->
+    <link href="_support/html/css/bootstrap.min.css" rel="stylesheet">
+    <link href="_support/html/css/bootstrap-theme.min.css" rel="stylesheet">
+    <link href="_support/html/css/square-braket-associates.css" rel="stylesheet">
+    <style>
+/*        .container { max-width: 55em; } */
+    </style>
+
+    <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+    <!--[if lt IE 9]>
+      <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+      <script src="https://oss.maxcdn.com/libs/respond.js/1.3.0/respond.min.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+
+    <div class="container text-justify">
+      <section>
+        <h1>Voyage: Persisting Objects in Document Databases</h1>
+        <div class="attribution">Esteban Lorenzano, Stéphane Ducasse, Johan Fabry and Norbert Hartl</div>
+
+        <h2>Tips and Tricks</h2>
+
+<p>
+This chapter contains some tips and tricks that people collected over the years. It was written by Sabina Manaa.
+</p>
+
+<h3>How to query for an object by id?    </h3>
+
+<p>
+If you know the _id value, you initialize an OID with this and query for it.
+</p><figure><pre><code>Person selectOne: {('_id' -&gt; (OID value: 16r55CDD2B6E9A87A520F000001))} asDictionary.</code></pre><figcaption></figcaption></figure>
+
+<p>
+Note that both are equivalent:
+</p><figure><pre><code>OID value: 26555050698940995562836590593. &quot;dec&quot;
+OID value: 16r55CDD2B6E9A87A520F000001. &quot;hex&quot;</code></pre><figcaption></figcaption></figure>
+
+<p>
+Or you have an instance (in this example of <code>Person</code>) which is in a root collection, then you ask it for its voyageId and use it in your query. The following assumes that you have a <code>Trips</code> root collection and a <code>Persons</code> root collection. The trip has an embedded <code>receipts</code> collection. Receipts have a <code>description</code>.  The query asks for all trips of the given person with at least one receipt with the description <code>aString</code>.
+</p>
+<figure><pre><code> Trip
+		selectMany:
+			{('receipts.description' -&gt; aString).
+			('person._id' -&gt; aPerson voyageId)} asDictionary</code></pre><figcaption></figcaption></figure>
+
+<h3>Not yet supported mongo commands</h3>
+
+<h4>Indexes</h4>
+<p>
+It is not yet possible to create and remove indexes from voyage, but you can use OSProcess.
+</p>
+<p>
+Assume you have a database named <code>myDB</code> with a collection named <code>Trips</code>. 
+The trips have an embedded collection with receipts. The receipts have an attribute named <code>description</code>.
+Then you can create an index on description with
+</p>
+<figure><pre><code>OSProcess command:
+'/{pathToMongoDB}/MongoDB/bin/mongo --eval &quot;db.getSiblingDB(''myDB'').Trips.createIndex({''receipts.description'':1})&quot;'</code></pre><figcaption></figcaption></figure>
+
+
+<p>
+Remove all indexes on the Trips collection with:
+</p><figure><pre><code>OSProcess command:
+'/{pathToMongoDB}/MongoDB/bin/mongo --eval &quot;db.getSiblingDB(''myDB'').Trips.dropIndexes()&quot;'</code></pre><figcaption></figcaption></figure>
+
+<h4>Backup</h4>
+<p>
+It is not yet possible to create backup from voyage, so use 
+</p>
+<figure><pre><code>OSProcess command:
+ '/{pathToMongoDB}/MongoDB/bin/mongodump  --out {BackupPath}'</code></pre><figcaption></figcaption></figure>
+
+<p>
+Please see the mongo documentation for mongo commands, especially the <code>--eval</code> command.
+</p>
+<h3>Useful mongo commands</h3>
+
+<p>
+Use “.explain()” in the mongo console to ensure that your query indeed uses the index.
+</p>
+<p>
+Example:
+</p>
+<p>
+Create an index on an embedded attribute (<code>description</code>):
+</p><figure><pre><code>&gt; db.Trips.createIndex({&quot;receipts.description&quot;:1})</code></pre><figcaption></figcaption></figure>
+
+<p>
+Query for it and call explain. We see, that only 2 documents were scanned.
+&gt; db.Trips.find({&quot;receipts.description&quot;:&quot;a&quot;}).explain(&quot;executionStats&quot;)
+{
+	&quot;cursor&quot; : &quot;BtreeCursor receipts.receiptDescription_1&quot;,
+	&quot;isMultiKey&quot; : true,
+	&quot;n&quot; : 2,
+	&quot;nscannedObjects&quot; : 2,
+	&quot;nscanned&quot; : 2,
+	&quot;nscannedObjectsAllPlans&quot; : 2,
+	&quot;nscannedAllPlans&quot; : 2,
+	&quot;scanAndOrder&quot; : false,
+	&quot;indexOnly&quot; : false,
+	&quot;nYields&quot; : 0,
+	&quot;nChunkSkips&quot; : 0,
+	&quot;millis&quot; : 0,
+	&quot;indexBounds&quot; : {
+		&quot;receipts.receiptDescription&quot; : [
+			[
+				&quot;a&quot;,
+				&quot;a&quot;
+			]
+		]
+	},
+	&quot;allPlans&quot; : [
+		{
+			&quot;cursor&quot; : &quot;BtreeCursor receipts.receiptDescription_1&quot;,
+			&quot;n&quot; : 2,
+			&quot;nscannedObjects&quot; : 2,
+			&quot;nscanned&quot; : 2,
+			&quot;indexBounds&quot; : {
+				&quot;receipts.receiptDescription&quot; : [
+					[
+						&quot;a&quot;,
+						&quot;a&quot;
+					]
+				]
+			}
+		}
+	],
+	&quot;server&quot; : &quot;MacBook-Pro-Sabine.local:27017&quot;
+}
+]]]
+</p>
+<p>
+Now, remove the index
+</p><figure><pre><code>&gt; db.Trips.dropIndexes()
+{
+	&quot;nIndexesWas&quot; : 2,
+	&quot;msg&quot; : &quot;non-_id indexes dropped for collection&quot;,
+	&quot;ok&quot; : 1
+}</code></pre><figcaption></figcaption></figure>
+
+<p>
+Query again, all documents were scanned.
+</p>
+<figure><pre><code>&gt; db.Trips.find({&quot;receipts.receiptDescription&quot;:&quot;a&quot;}).explain(&quot;executionStats&quot;)
+{
+	&quot;cursor&quot; : &quot;BasicCursor&quot;,
+	&quot;isMultiKey&quot; : false,
+	&quot;n&quot; : 2,
+	&quot;nscannedObjects&quot; : 246,
+	&quot;nscanned&quot; : 246,
+	&quot;nscannedObjectsAllPlans&quot; : 246,
+	&quot;nscannedAllPlans&quot; : 246,
+	&quot;scanAndOrder&quot; : false,
+	&quot;indexOnly&quot; : false,
+	&quot;nYields&quot; : 0,
+	&quot;nChunkSkips&quot; : 0,
+	&quot;millis&quot; : 1,
+	&quot;indexBounds&quot; : {
+		
+	},
+	&quot;allPlans&quot; : [
+		{
+			&quot;cursor&quot; : &quot;BasicCursor&quot;,
+			&quot;n&quot; : 2,
+			&quot;nscannedObjects&quot; : 246,
+			&quot;nscanned&quot; : 246,
+			&quot;indexBounds&quot; : {
+				
+			}
+		}
+	],
+	&quot;server&quot; : &quot;MacBook-Pro-Sabine.local:27017&quot;
+}</code></pre><figcaption></figcaption></figure>
+
+
+
+<h3>Storing instances of Date in Mongo</h3>
+<p>
+A known issue of mongo is Mongo that it does not difference between <code>Date</code> and <code>DateAndTime</code>, so even if you commit a <code>Date</code>, you will get back a <code>DateAndTime</code>. You have to transform it back to <code>Date</code> manually when materializing the object.
+</p>
+<h3>Database design</h3>
+<p>
+Often you objects do not form a simple tree but a graph with cycles. For example you could have persons which are pointing to their trips and each trip knows about its person (<code>Person &lt;-&gt;&gt;Trip</code>). If you create a root Collection with Persons and a Root collection with Trips, you avoid endless loops to be generated (see chapter 1.2).
+</p>
+<p>
+This is an example for a <code>trip</code> pointing to a <code>person</code> which is in another root collection and another root collection, <code>paymentMethod</code>. Note that the receipt also points back to the trip, which does not create a loop.
+</p>
+<figure><pre><code>Trip
+{
+ &quot;_id&quot; : ObjectId(&quot;55cf2bc73c9b0fe702000008&quot;), 
+&quot;#version&quot; : 876079653, 
+&quot;person&quot; : { 
+	&quot;#collection&quot; : &quot;Persons&quot;, 
+	&quot;_id&quot; : ObjectId(&quot;55cf2bbb3c9b0fe702000007&quot;) }, 
+&quot;receipts&quot; : [ 	
+	{ &quot;currency&quot; : &quot;EUR&quot;, 	
+	&quot;date&quot; : { &quot;#instanceOf&quot; : &quot;ZTimestamp&quot;, &quot;jdn&quot; : 2457249, &quot;secs&quot; : 0 }, 	
+	&quot;exchangeRate&quot; : 1, 	
+	&quot;paymentMethod&quot; : {
+		&quot;#collection&quot; : &quot;PaymentMethods&quot;, 	
+		&quot;_id&quot; : ObjectId(&quot;55cf2bbb3c9b0fe702000003&quot;) }, 
+	&quot;receiptDescription&quot; : &quot;Taxi zum Hotel&quot;, 	
+	&quot;receiptNumber&quot; : 1, 	
+	&quot;trip&quot; : { 
+		&quot;#collection&quot; : &quot;Trips&quot;, 	
+		&quot;_id&quot; : ObjectId(&quot;55cf2bc73c9b0fe702000008&quot;) } } ], 
+	&quot;startPlace&quot; : &quot;Österreich&quot;,    
+	&quot;tripName&quot; : &quot;asdf&quot;, 
+	&quot;tripNumber&quot; : 1 }</code></pre><figcaption></figcaption></figure>
+
+<p>
+The corresponding <code>person</code> points to all its <code>trips</code> and to its <code>company</code>.
+</p><figure><pre><code>{ &quot;#version&quot; : 714221829, 
+&quot;_id&quot; : ObjectId(&quot;55cf2bbb3c9b0fe702000007&quot;), 
+&quot;bankName&quot; : &quot;&quot;,
+ &quot;company&quot; : { 
+&quot;#collection&quot; : &quot;Companies&quot;, 
+&quot;_id&quot; : ObjectId(&quot;55cf2bbb3c9b0fe702000002&quot;) },
+&quot;email&quot; : &quot;bb@spesenfuchs.de&quot;, 
+&quot;firstName&quot; : &quot;Berta&quot;,
+&quot;lastName&quot; : &quot;Block&quot;,  
+&quot;roles&quot; : [  &quot;user&quot; ], 
+&quot;tableOfAccounts&quot; : &quot;SKR03&quot;, 
+&quot;translator&quot; : &quot;German&quot;, 
+&quot;trips&quot; : [ 	
+{
+&quot;#collection&quot; : &quot;Trips&quot;, 	
+&quot;_id&quot; : ObjectId(&quot;55cf2bc73c9b0fe702000008&quot;) } ] }</code></pre><figcaption></figcaption></figure>
+
+<p>
+If your domain has strictly delimited areas, e.g. clients, you could think about creating one repository per area (client). 
+</p>
+<h3>Retrieving data </h3>
+
+<p>
+One question is if it possible to  retrieve data from Mongo collection even if the database was not created via Voyage.
+Yes it is possible. Here is the solution.
+</p>
+<p>
+First we create a class <code>MyClass</code> with two class side methods:
+</p>
+<figure><pre><code>MyClass class &gt;&gt; isVoyageRoot
+	^ true</code></pre><figcaption></figcaption></figure>
+
+<figure><pre><code>MyClass class &gt;&gt; descriptionContainer
+    &lt;voyageContainer&gt;
+    ^ VOContainer new
+        collectionName: 'myCollection';
+        yourself</code></pre><figcaption></figcaption></figure>
+<p>
+	
+Also, to properly read the data one should add instance variables depending on what is in the database. 
+</p>
+<p>
+For example if we have the following information stored in the database: 
+</p>
+<figure><pre><code>{ &quot;_id&quot; : ObjectId(&quot;5900a0175bc65a2b7973b48a&quot;), &quot;item&quot; : &quot;canvas&quot;, &quot;qty&quot; : 100, &quot;tags&quot; : [ &quot;cotton&quot; ] }</code></pre><figcaption></figcaption></figure>
+
+<p>
+In this case <code>MyClass</code> should have instanceVariables: <code>item</code>, <code>qty</code> and <code>tags</code> and accessors.
+Then we define the following description on the class side
+</p>
+<figure><pre><code>MyClass class &gt;&gt; mongoItem
+	&lt;mongoDescription&gt;
+	^ VOToOneDescription new
+		attributeName: 'item';
+		kind: String;
+		yourself</code></pre><figcaption></figcaption></figure>
+
+<figure><pre><code>MyClass class &gt;&gt; mongoQty
+	&lt;mongoDescription&gt;
+	^ VOToOneDescription new
+		attributeName: 'qty';
+		kind: Integer;
+		yourself</code></pre><figcaption></figcaption></figure>
+
+<figure><pre><code>MyClass class &gt;&gt; mongoTags
+	&lt;mongoDescription&gt;
+	^ VOToOneDescription new
+		attributeName: 'tags';
+		kind: OrderedCollection;
+		yourself</code></pre><figcaption></figcaption></figure>
+<p>
+	
+After that one can connect to database and get the information.
+</p>
+<figure><pre><code>| repository | 
+repository := VOMongoRepository database: 'databaseName'.
+repository selectAll: MyClass</code></pre><figcaption></figcaption></figure>
+
+
+
+
+
+
+      </section>
+    </div>
+
+    <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
+    <script src="https://code.jquery.com/jquery.js"></script>
+    <!-- Include all compiled plugins (below), or include individual files as needed -->
+    <script src="_support/html/js/bootstrap.min.js"></script>
+
+    <!-- Syntax highlighting of code blocks -->
+    <script>hljs.initHighlightingOnLoad();</script>
+
+    <!-- Prettify annotated paragraphs-->
+    <script src="_support/html/js/annotated-paragraphs.js"></script>
+
+  </body>
+</html>
